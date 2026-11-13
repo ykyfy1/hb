@@ -10,10 +10,10 @@ import xml.etree.ElementTree as ET
 
 # ===================== EPG配置（多EPG备用列表，按顺序轮询） =====================
 EPG_URLS = [
-    "https://raw.githubusercontent.com/kuke31/xmlgz/main/all.xml.gz",
+   # "https://raw.githubusercontent.com/kuke31/xmlgz/main/all.xml.gz",
     # 可在这里继续添加备用EPG地址
     "https://epg.112114.xyz/pp.xml",
-    "https://epg.51zmt.top:8000/e.xml.gz",
+   # "https://epg.51zmt.top:8000/e.xml.gz",
 ]
 
 # ===================== 从环境变量读取源链接M3U_URL_LIST，兼容Github Secret =====================
