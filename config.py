@@ -6,10 +6,9 @@ import io
 
 # ========== 配置区 ==========
 source_urls = [line.strip() for line in os.getenv("M3U_URL_LIST","").splitlines() if line.strip()]
-# 使用kuke31的gz EPG源
 epg_source_xml_url = "https://raw.githubusercontent.com/kuke31/xmlgz/main/all.xml.gz"
 output_m3u = "final.m3u"
-demo_file = "demo.txt"  # 排序参考文件
+demo_file = "demo.txt"
 
 ip_version_priority = "ipv6"
 url_blacklist = []
@@ -29,13 +28,11 @@ announcements = [
 # ============================
 
 def clean_channel_name(raw_name: str) -> str:
-    """频道名称清洗，用于模糊匹配"""
     raw_name = re.sub(r"(高清|超清|HD|4K|蓝光|标清|综合|频道)", "", raw_name, flags=re.IGNORECASE)
     raw_name = re.sub(r"[-_\s]", "", raw_name)
     return raw_name.upper().strip()
 
 def load_demo_order(demo_path):
-    """加载demo.txt，生成 清洗名称 -> 排序序号"""
     order_map = {}
     if os.path.exists(demo_path):
         with open(demo_path, "r", encoding="utf-8") as f:
@@ -51,7 +48,6 @@ def load_demo_order(demo_path):
 def build_epg_id_map(xml_url: str):
     print(f"正在拉取EPG源: {xml_url}")
     resp = requests.get(xml_url, timeout=30)
-    # 自动识别gzip压缩包并解压
     if xml_url.endswith(".gz"):
         gzfile = gzip.GzipFile(fileobj=io.BytesIO(resp.content))
         xml_txt = gzfile.read().decode("utf-8")
@@ -103,7 +99,6 @@ def parse_m3u_to_entries(m3u_text: str, name2id_map: dict):
 
 
 if __name__ == "__main__":
-    # 加载demo排序表
     demo_order_map = load_demo_order(demo_file)
     epg_name_id_map = build_epg_id_map(epg_source_xml_url)
 
@@ -113,24 +108,20 @@ if __name__ == "__main__":
         items = parse_m3u_to_entries(raw_m3u, epg_name_id_map)
         all_entries.extend(items)
 
-    # 按清洗后的频道名分组，同频道全部线路放一组
     groups = {}
     for item in all_entries:
         if item["key"] not in groups:
             groups[item["key"]] = []
         groups[item["key"]].append(item)
 
-    # 排序规则：demo.txt内频道按demo里顺序；不在demo的频道全部放末尾
     def sort_by_demo(group_key):
         if group_key in demo_order_map:
             return (0, demo_order_map[group_key])
         else:
-            # demo不存在的频道，放到最后，按频道名字母排序
             return (1, group_key)
 
     sorted_group_keys = sorted(groups.keys(), key=sort_by_demo)
 
-    # 组装最终m3u
     final_text = f'#EXTM3U x-tvg-url="{epg_source_xml_url}"\n'
     for gkey in sorted_group_keys:
         for entry in groups[gkey]:
