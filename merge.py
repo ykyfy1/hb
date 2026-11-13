@@ -13,7 +13,7 @@ EPG_URLS = [
     "https://raw.githubusercontent.com/kuke31/xmlgz/main/all.xml.gz",
     # 可在这里继续添加备用EPG地址
     "https://epg.112114.xyz/pp.xml",
-    # "https://epg.51zmt.top:8000/e.xml.gz",
+    "https://epg.51zmt.top:8000/e.xml.gz",
 ]
 
 # ===================== 从环境变量读取源链接M3U_URL_LIST，兼容Github Secret =====================
@@ -44,7 +44,7 @@ config = {
 logging.basicConfig(level=logging.INFO, format='%(asctime)s - %(levelname)s - %(message)s', handlers=[logging.FileHandler("function.log", "w", encoding="utf-8"), logging.StreamHandler()])
 
 def load_epg_tvg_map(epg_url):
-    """加载单个EPG，自动识别gz压缩/xml原生，XML解析兼容多种xmltv格式"""
+    """加载单个EPG，读取该channel全部display-name别名，全部加入映射表"""
     logging.info(f"尝试加载EPG：{epg_url}")
     try:
         resp = requests.get(epg_url, timeout=30)
@@ -69,15 +69,17 @@ def load_epg_tvg_map(epg_url):
             tvg_id = channel.get("id")
             if not tvg_id:
                 continue
-            dn_node = channel.find("display-name")
-            if dn_node is None or not dn_node.text:
-                continue
-            name = dn_node.text.strip()
-            # 频道名称清洗，和get_tvgid_by_name保持一致
-            clean_name = re.sub(r"[-_\s高清|超清|HD|4K|标清]", "", name).strip().upper()
-            tvg_map[clean_name] = tvg_id
+            # 取出当前channel下【所有】display-name节点（支持多个别名）
+            dn_nodes = channel.findall("display-name")
+            for dn_node in dn_nodes:
+                if dn_node is None or not dn_node.text:
+                    continue
+                name = dn_node.text.strip()
+                # 频道名称清洗，和get_tvgid_by_name保持一致
+                clean_name = re.sub(r"[-_\s高清|超清|HD|4K|标清]", "", name).strip().upper()
+                tvg_map[clean_name] = tvg_id
 
-        logging.info(f"✅ EPG加载成功，共读取 {len(tvg_map)} 个tvg-id")
+        logging.info(f"✅ EPG加载成功，共读取 {len(tvg_map)} 个tvg-id映射(含别名)")
         return tvg_map
     except Exception as e:
         logging.error(f"❌ EPG加载失败: {e}")
