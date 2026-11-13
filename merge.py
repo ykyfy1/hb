@@ -38,7 +38,7 @@ CCTV_SET = set(MANUAL_TVG_MAP.keys())
 EPG_URLS = [
     "https://raw.githubusercontent.com/kuke31/xmlgz/main/all.xml.gz",
     "https://epg.112114.xyz/pp.xml",
-    "https://epg.51zmt.top:8000/e.xml.gz",
+    "http://epg.51zmt.top:8000/e.xml.gz",
 ]
 
 # ===================== 环境变量读取M3U_URL_LIST secret =====================
