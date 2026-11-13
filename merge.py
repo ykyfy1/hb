@@ -30,12 +30,15 @@ MANUAL_TVG_MAP = {
     "CCTV4K":   "CCTV4K",
     "CCTV5+":   "CCTV5+",
     "CCTV8K":   "CCTV8K",
+    "浙江钱江都市":   "钱江都市",
 }
 CCTV_SET = set(MANUAL_TVG_MAP.keys())
 
 # ===================== EPG配置，只用kuke31源 =====================
 EPG_URLS = [
     "https://raw.githubusercontent.com/kuke31/xmlgz/main/all.xml.gz",
+    "https://epg.112114.xyz/pp.xml",
+    "https://epg.51zmt.top:8000/e.xml.gz",
 ]
 
 # ===================== 环境变量读取M3U_URL_LIST secret =====================
@@ -257,10 +260,11 @@ def updateChannelUrlsM3U(channels, template_channels):
                             # ==========重点：同频道所有线路，tvg-id完全不变，序号只加到url后缀，不碰tvg-id==========
                             real_tvgid = get_tvgid_by_name(channel_name)
                             for index, url in enumerate(filtered_urls, start=1):
-                                if is_ipv6(url):
-                                    url_suffix = f"$LR•IPV6" if total_urls == 1 else f"$LR•IPV6『线路{index}』"
-                                else:
-                                    url_suffix = f"" if total_urls == 1 else f"$『线路{index}』"
+                               # if is_ipv6(url):
+                               #     url_suffix = f"$LR•IPV6" if total_urls == 1 else f"$LR•IPV6『线路{index}』"
+                               # else:
+                               #     url_suffix = f"" if total_urls == 1 else f"$『线路{index}』"
+                                url_suffix = ""
                                 if '$' in url:
                                     base_url = url.split('$', 1)[0]
                                 else:
