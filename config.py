@@ -4,7 +4,7 @@ source_urls = [line.strip() for line in os.getenv("M3U_URL_LIST","").splitlines(
 
 # EPG地址，自行修改
 epg_urls = [
-    "https://cdn.jsdelivr.net/gh/zjyktcyfy/j-m-d@main/JMD.gz"
+    "https://proxy.lalifeier.eu.org/https://raw.githubusercontent.com/zjyktcyfy/j-m-d/refs/heads/main/JMD.gz"
 ]
 
 # IP版本优先级 ipv6 / ipv4
