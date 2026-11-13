@@ -283,7 +283,7 @@ def updateChannelUrlsM3U(channels, template_channels):
 
                                 new_url = f"{base_url}{url_suffix}"
                                 real_tvgid = get_tvgid_by_name(channel_name)
-                                f_m3u.write(f"#EXTINF:-1 tvg-id="{real_tvgid}" tvg-name="{channel_name}" tvg-logo="https://proxy.lalifeier.eu.org/https://raw.githubusercontent.com/zjyktcyfy/zj-fy/main/tv/{channel_name}.png\" group-title="{category}",{channel_name}\n")
+                                f_m3u.write(f"#EXTINF:-1 tvg-id=\"{index}\" tvg-name=\"{channel_name}\" tvg-logo=\"https://proxy.lalifeier.eu.org/https://raw.githubusercontent.com/zjyktcyfy/zj-fy/main/tv/{channel_name}.png\" group-title=\"{category}\",{channel_name}\n")
                                 f_m3u.write(new_url + "\n")
                                 f_txt.write(f"{channel_name},{new_url}\n")
 
