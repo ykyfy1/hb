@@ -254,17 +254,19 @@ def updateChannelUrlsM3U(channels, template_channels):
                                     written_urls.add(url)
 
                             total_urls = len(filtered_urls)
+                            # ==========重点：同频道所有线路，tvg-id完全不变，序号只加到url后缀，不碰tvg-id==========
+                            real_tvgid = get_tvgid_by_name(channel_name)
                             for index, url in enumerate(filtered_urls, start=1):
                                 if is_ipv6(url):
                                     url_suffix = f"$LR•IPV6" if total_urls == 1 else f"$LR•IPV6『线路{index}』"
                                 else:
-                                    url_suffix = f"" if total_urls == 1 else f""
+                                    url_suffix = f"" if total_urls == 1 else f"$『线路{index}』"
                                 if '$' in url:
                                     base_url = url.split('$', 1)[0]
                                 else:
                                     base_url = url
                                 new_url = f"{base_url}{url_suffix}"
-                                real_tvgid = get_tvgid_by_name(channel_name)
+                                # 这里 real_tvgid 在循环外一次性获取！！所有线路共用同一个tvg-id
                                 f_m3u.write(f"#EXTINF:-1 tvg-id=\"{real_tvgid}\" tvg-name=\"{channel_name}\" tvg-logo=\"https://proxy.lalifeier.eu.org/https://raw.githubusercontent.com/zjyktcyfy/zj-fy/main/tv/{channel_name}.png\" group-title=\"{category}\",{channel_name}\n")
                                 f_m3u.write(new_url + "\n")
                                 f_txt.write(f"{channel_name},{new_url}\n")
