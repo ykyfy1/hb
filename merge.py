@@ -12,6 +12,7 @@ import xml.etree.ElementTree as ET
 EPG_URLS = [
     "https://raw.githubusercontent.com/kuke31/xmlgz/main/all.xml.gz",
     # 可在这里继续添加备用EPG地址
+    "https://epg.112114.xyz/pp.xml",
     # "https://epg.51zmt.top:8000/e.xml.gz",
 ]
 
