@@ -1,10 +1,13 @@
 import os
 import re
 import requests
+import gzip
+import io
 
 # ========== 配置区 ==========
 source_urls = [line.strip() for line in os.getenv("M3U_URL_LIST","").splitlines() if line.strip()]
-epg_source_xml_url = "https://epg.112114.xyz/pp.xml"
+# 使用kuke31的gz EPG源
+epg_source_xml_url = "https://raw.githubusercontent.com/kuke31/xmlgz/main/all.xml.gz"
 output_m3u = "final.m3u"
 demo_file = "demo.txt"  # 排序参考文件
 
@@ -48,7 +51,13 @@ def load_demo_order(demo_path):
 def build_epg_id_map(xml_url: str):
     print(f"正在拉取EPG源: {xml_url}")
     resp = requests.get(xml_url, timeout=30)
-    xml_txt = resp.text
+    # 自动识别gzip压缩包并解压
+    if xml_url.endswith(".gz"):
+        gzfile = gzip.GzipFile(fileobj=io.BytesIO(resp.content))
+        xml_txt = gzfile.read().decode("utf-8")
+    else:
+        xml_txt = resp.text
+
     name2id = {}
     pattern = re.compile(r'<channel id="([^"]+)".*?<display-name[^>]*>([^<]+)</display-name>', re.S)
     for ch_id, disp_name in pattern.findall(xml_txt):
