@@ -42,7 +42,7 @@ def load_demo_order(demo_path):
             order_map[key] = idx
         print(f"✅ 加载demo排序文件成功，共 {len(order_map)} 个预设频道")
     else:
-        print(f"⚠️ 未找到 {demo_file}，将使用默认关键词排序")
+        print(f"⚠️ 未找到 {demo_file}，将使用默认字母排序")
     return order_map
 
 def build_epg_id_map(xml_url: str):
