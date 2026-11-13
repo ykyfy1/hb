@@ -8,41 +8,40 @@ import io
 import os
 import xml.etree.ElementTree as ET
 
-# =====================【核心：手动主映射，优先级最高，不会被EPG覆盖】=====================
-# key: 清洗后的大写频道名，value: 对应的tvg-id
+# ===================== 手动主映射【央视固定，EPG不会覆盖】 =====================
 MANUAL_TVG_MAP = {
-    "CCTV1": "CCTV1",
-    "CCTV14": "CCTV14",
-    "CCTV4": "CCTV4",
-    "CCTV4K": "CCTV4K",
-    "CCTV2": "CCTV2",
-    "CCTV3": "CCTV3",
-    "CCTV5": "CCTV5",
-    "CCTV6": "CCTV6",
-    "CCTV7": "CCTV7",
-    "CCTV8": "CCTV8",
-    "CCTV9": "CCTV9",
-    "CCTV10": "CCTV10",
-    "CCTV11": "CCTV11",
-    "CCTV12": "CCTV12",
-    "CCTV13": "CCTV13",
-    "CCTV15": "CCTV15",
-    "CCTV16": "CCTV16",
-    "CCTV17": "CCTV17",
+    "CCTV1":    "CCTV1",
+    "CCTV2":    "CCTV2",
+    "CCTV3":    "CCTV3",
+    "CCTV4":    "CCTV4",
+    "CCTV5":    "CCTV5",
+    "CCTV6":    "CCTV6",
+    "CCTV7":    "CCTV7",
+    "CCTV8":    "CCTV8",
+    "CCTV9":    "CCTV9",
+    "CCTV10":   "CCTV10",
+    "CCTV11":   "CCTV11",
+    "CCTV12":   "CCTV12",
+    "CCTV13":   "CCTV13",
+    "CCTV14":   "CCTV14",
+    "CCTV15":   "CCTV15",
+    "CCTV16":   "CCTV16",
+    "CCTV17":   "CCTV17",
+    "CCTV4K":   "CCTV4K",
+    "CCTV5+":   "CCTV5+",
+    "CCTV8K":   "CCTV8K",
 }
+CCTV_SET = set(MANUAL_TVG_MAP.keys())
 
-# ===================== EPG配置【多个EPG源同时启用】 =====================
+# ===================== EPG配置，只用kuke31源 =====================
 EPG_URLS = [
     "https://raw.githubusercontent.com/kuke31/xmlgz/main/all.xml.gz",
-   # "https://epg.112114.xyz/pp.xml",
-   # "https://epg.51zmt.top:8000/e.xml.gz",
 ]
 
-# ===================== 从环境变量读取源链接M3U_URL_LIST，兼容Github Secret =====================
+# ===================== 环境变量读取M3U_URL_LIST secret =====================
 source_url_env = os.getenv("M3U_URL_LIST", "")
 source_urls = [u.strip() for u in source_url_env.splitlines() if u.strip()]
 
-# 模拟原来config，优先使用环境变量里的链接
 config = {
     "source_urls": source_urls,
     "epg_urls": EPG_URLS,
@@ -65,15 +64,17 @@ config = {
 
 logging.basicConfig(level=logging.INFO, format='%(asctime)s - %(levelname)s - %(message)s', handlers=[logging.FileHandler("function.log", "w", encoding="utf-8"), logging.StreamHandler()])
 
+def clean_channel_name(name):
+    return re.sub(r"[-_\s高清|超清|HD|4K|标清]", "", name).strip().upper()
+
 def load_epg_tvg_map(epg_url):
-    """加载单个EPG，只做备用映射，优先级低于MANUAL_TVG_MAP"""
     logging.info(f"尝试加载EPG：{epg_url}")
     try:
         resp = requests.get(epg_url, timeout=30)
         resp.raise_for_status()
         raw_data = resp.content
 
-        # 判断是否gzip压缩
+        # 自动识别gz压缩包
         if raw_data[:2] == b'\x1f\x8b':
             with gzip.GzipFile(fileobj=io.BytesIO(raw_data)) as gz:
                 xml_bytes = gz.read()
@@ -81,7 +82,7 @@ def load_epg_tvg_map(epg_url):
             xml_bytes = raw_data
 
         xml_str = xml_bytes.decode("utf-8", errors="ignore")
-        # 移除命名空间，解决带tv:前缀解析失败
+        # 清除xml命名空间前缀
         xml_str = re.sub(r'xmlns[^"]*"[^"]*"', "", xml_str)
         xml_str = re.sub(r'\w+:(\w+)', r'\1', xml_str)
         root = ET.fromstring(xml_str)
@@ -96,49 +97,43 @@ def load_epg_tvg_map(epg_url):
                 if dn_node is None or not dn_node.text:
                     continue
                 name = dn_node.text.strip()
-                clean_name = re.sub(r"[-_\s高清|超清|HD|4K|标清]", "", name).strip().upper()
-                # 已经在手动映射里的央视频道，不写入备用map，防止覆盖
-                if clean_name not in MANUAL_TVG_MAP:
-                    epg_backup_map[clean_name] = tvg_id
+                clean_name = clean_channel_name(name)
+                # 央视全部跳过，不读入备份映射，防止错误别名污染
+                if clean_name in CCTV_SET:
+                    continue
+                epg_backup_map[clean_name] = tvg_id
 
-        logging.info(f"✅ EPG备用映射加载成功，共读取 {len(epg_backup_map)} 个频道")
+        logging.info(f"✅ EPG加载完成，非央视备用映射数量：{len(epg_backup_map)}")
         return epg_backup_map
     except Exception as e:
         logging.error(f"❌ EPG加载失败: {e}")
         return {}
 
 def load_epg_with_fallback(epg_url_list):
-    """依次加载所有EPG，合并备用映射，后面的不会覆盖前面的"""
     total_backup_map = {}
     for url in epg_url_list:
-        map_tmp = load_epg_tvg_map(url)
-        if map_tmp:
-            # 不覆盖已存在key，保留先读到的映射
-            for k,v in map_tmp.items():
+        tmp = load_epg_tvg_map(url)
+        if tmp:
+            for k, v in tmp.items():
                 if k not in total_backup_map:
                     total_backup_map[k] = v
-    if len(total_backup_map) ==0:
-        logging.warning("所有EPG源全部加载失败，备用tvg-id映射为空")
+    if len(total_backup_map) == 0:
+        logging.warning("EPG备用映射为空，非央视频道无法匹配tvg‑id")
     return total_backup_map
 
-# 全局加载全部EPG合并后的备用映射
 epg_backup_mapping = load_epg_with_fallback(EPG_URLS)
 
 def get_tvgid_by_name(channel_name):
-    """
-    获取tvg-id:
-    1. 优先查手动MANUAL_TVG_MAP
-    2. 手动没有，才去EPG合并的备用映射查询
-    """
-    clean_name = re.sub(r"[-_\s高清|超清|HD|4K|标清]", "", channel_name).strip().upper()
+    clean_name = clean_channel_name(channel_name)
+    # 优先手动央视映射
     if clean_name in MANUAL_TVG_MAP:
         return MANUAL_TVG_MAP[clean_name]
+    # 其他频道使用epg备份映射
     return epg_backup_mapping.get(clean_name, "")
 
 def parse_template(template_file):
     template_channels = OrderedDict()
     current_category = None
-
     with open(template_file, "r", encoding="utf-8") as f:
         for line in f:
             line = line.strip()
@@ -149,12 +144,10 @@ def parse_template(template_file):
                 elif current_category:
                     channel_name = line.split(",")[0].strip()
                     template_channels[current_category].append(channel_name)
-
     return template_channels
 
 def fetch_channels(url):
     channels = OrderedDict()
-
     try:
         response = requests.get(url)
         response.raise_for_status()
@@ -198,12 +191,10 @@ def fetch_channels(url):
             logging.info(f"url: {url} 爬取成功✅，包含频道分类: {categories}")
     except requests.RequestException as e:
         logging.error(f"url: {url} 爬取失败❌, Error: {e}")
-
     return channels
 
 def match_channels(template_channels, all_channels):
     matched_channels = OrderedDict()
-
     for category, channel_list in template_channels.items():
         matched_channels[category] = OrderedDict()
         for channel_name in channel_list:
@@ -211,14 +202,12 @@ def match_channels(template_channels, all_channels):
                 for online_channel_name, online_channel_url in online_channel_list:
                     if channel_name == online_channel_name:
                         matched_channels[category].setdefault(channel_name, []).append(online_channel_url)
-
     return matched_channels
 
 def filter_source_urls(template_file):
     template_channels = parse_template(template_file)
     source_urls = config["source_urls"]
     logging.info(f"读取到源链接数量：{len(source_urls)}")
-
     all_channels = OrderedDict()
     for url in source_urls:
         fetched_channels = fetch_channels(url)
@@ -227,9 +216,7 @@ def filter_source_urls(template_file):
                 all_channels[category].extend(channel_list)
             else:
                 all_channels[category] = channel_list
-
     matched_channels = match_channels(template_channels, all_channels)
-
     return matched_channels, template_channels
 
 def is_ipv6(url):
@@ -237,24 +224,20 @@ def is_ipv6(url):
 
 def updateChannelUrlsM3U(channels, template_channels):
     written_urls = set()
-
     current_date = datetime.now().strftime("%Y-%m-%d")
     for group in config["announcements"]:
         for announcement in group['entries']:
             if announcement['name'] is None:
                 announcement['name'] = current_date
 
-    # 多EPG自动拼接到x-tvg-url
     with open("zubo.m3u", "w", encoding="utf-8") as f_m3u:
-        epg_list_str = ",".join(f'"{epg_url}"' for epg_url in config["epg_urls"])
-        f_m3u.write(f"""#EXTM3U x-tvg-url={epg_list_str}\n""")
-
+        f_m3u.write(f"""#EXTM3U x-tvg-url={",".join(f'"{epg_url}"' for epg_url in config["epg_urls"])}\n""")
         with open("zubo.txt", "w", encoding="utf-8") as f_txt:
             for group in config["announcements"]:
                 f_txt.write(f"{group['channel']},#genre#\n")
                 for announcement in group['entries']:
                     ann_tvgid = get_tvgid_by_name(announcement['name'])
-                    f_m3u.write(f"""#EXTINF:-1 tvg-id="{ann_tvgid}" tvg-name="{announcement['name']}" tvg-logo="https://epg.112114.xyz/logo/{announcement['name']}.png" group-title="{group['channel']}",{announcement['name']}\n""")
+                    f_m3u.write(f"""#EXTINF:-1 tvg-id="{ann_tvgid}" tvg-name="{announcement['name']}" tvg-logo="{announcement['logo']}" group-title="{group['channel']}",{announcement['name']}\n""")
                     f_m3u.write(f"{announcement['url']}\n")
                     f_txt.write(f"{announcement['name']},{announcement['url']}\n")
 
@@ -280,13 +263,11 @@ def updateChannelUrlsM3U(channels, template_channels):
                                     base_url = url.split('$', 1)[0]
                                 else:
                                     base_url = url
-
                                 new_url = f"{base_url}{url_suffix}"
                                 real_tvgid = get_tvgid_by_name(channel_name)
-                                f_m3u.write(f"#EXTINF:-1 tvg-id=\"{index}\" tvg-name=\"{channel_name}\" tvg-logo=\"https://proxy.lalifeier.eu.org/https://raw.githubusercontent.com/zjyktcyfy/zj-fy/main/tv/{channel_name}.png\" group-title=\"{category}\",{channel_name}\n")
+                                f_m3u.write(f"#EXTINF:-1 tvg-id=\"{real_tvgid}\" tvg-name=\"{channel_name}\" tvg-logo=\"https://proxy.lalifeier.eu.org/https://raw.githubusercontent.com/zjyktcyfy/zj-fy/main/tv/{channel_name}.png\" group-title=\"{category}\",{channel_name}\n")
                                 f_m3u.write(new_url + "\n")
                                 f_txt.write(f"{channel_name},{new_url}\n")
-
             f_txt.write("\n")
 
 if __name__ == "__main__":
