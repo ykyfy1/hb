@@ -4,7 +4,7 @@ import requests
 
 # ========== 配置区 ==========
 source_urls = [line.strip() for line in os.getenv("M3U_URL_LIST","").splitlines() if line.strip()]
-epg_source_xml_url = "https://raw.githubusercontent.com/kuke31/xmlgz/main/all.xml.gz"
+epg_source_xml_url = "https://epg.112114.xyz/pp.xml"
 output_m3u = "final.m3u"
 demo_file = "demo.txt"  # 排序参考文件
 
