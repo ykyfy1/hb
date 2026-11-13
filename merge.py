@@ -8,7 +8,7 @@ import io
 import os
 
 # ===================== EPG配置 =====================
-EPG_GZ_URL = "https://raw.githubusercontent.com/kuke31/epg/main/all.xml.gz"
+EPG_GZ_URL = "https://raw.githubusercontent.com/kuke31/xmlgz/main/all.xml.gz"
 EPG_URLS = [EPG_GZ_URL]
 
 # ===================== 从环境变量读取源链接M3U_URL_LIST，兼容Github Secret =====================
