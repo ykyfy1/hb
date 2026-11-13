@@ -8,11 +8,33 @@ import io
 import os
 import xml.etree.ElementTree as ET
 
-# ===================== EPG配置（多EPG备用列表，按顺序轮询） =====================
+# =====================【核心：手动主映射，优先级最高，不会被EPG覆盖】=====================
+# key: 清洗后的大写频道名，value: 对应的tvg-id
+MANUAL_TVG_MAP = {
+    "CCTV1": "CCTV1",
+    "CCTV14": "CCTV14",
+    "CCTV4": "CCTV4",
+    "CCTV4K": "CCTV4K",
+    "CCTV2": "CCTV2",
+    "CCTV3": "CCTV3",
+    "CCTV5": "CCTV5",
+    "CCTV6": "CCTV6",
+    "CCTV7": "CCTV7",
+    "CCTV8": "CCTV8",
+    "CCTV9": "CCTV9",
+    "CCTV10": "CCTV10",
+    "CCTV11": "CCTV11",
+    "CCTV12": "CCTV12",
+    "CCTV13": "CCTV13",
+    "CCTV15": "CCTV15",
+    "CCTV16": "CCTV16",
+    "CCTV17": "CCTV17",
+}
+
+# ===================== EPG配置【多个EPG源同时启用】 =====================
 EPG_URLS = [
-   # "https://raw.githubusercontent.com/kuke31/xmlgz/main/all.xml.gz",
-    # 可在这里继续添加备用EPG地址
-    "https://epg.112114.xyz/pp.xml",
+    "https://raw.githubusercontent.com/kuke31/xmlgz/main/all.xml.gz",
+   # "https://epg.112114.xyz/pp.xml",
    # "https://epg.51zmt.top:8000/e.xml.gz",
 ]
 
@@ -44,7 +66,7 @@ config = {
 logging.basicConfig(level=logging.INFO, format='%(asctime)s - %(levelname)s - %(message)s', handlers=[logging.FileHandler("function.log", "w", encoding="utf-8"), logging.StreamHandler()])
 
 def load_epg_tvg_map(epg_url):
-    """加载单个EPG，读取该channel全部display-name别名，全部加入映射表"""
+    """加载单个EPG，只做备用映射，优先级低于MANUAL_TVG_MAP"""
     logging.info(f"尝试加载EPG：{epg_url}")
     try:
         resp = requests.get(epg_url, timeout=30)
@@ -64,43 +86,54 @@ def load_epg_tvg_map(epg_url):
         xml_str = re.sub(r'\w+:(\w+)', r'\1', xml_str)
         root = ET.fromstring(xml_str)
 
-        tvg_map = {}
+        epg_backup_map = {}
         for channel in root.findall("channel"):
             tvg_id = channel.get("id")
             if not tvg_id:
                 continue
-            # 取出当前channel下【所有】display-name节点（支持多个别名）
             dn_nodes = channel.findall("display-name")
             for dn_node in dn_nodes:
                 if dn_node is None or not dn_node.text:
                     continue
                 name = dn_node.text.strip()
-                # 频道名称清洗，和get_tvgid_by_name保持一致
                 clean_name = re.sub(r"[-_\s高清|超清|HD|4K|标清]", "", name).strip().upper()
-                tvg_map[clean_name] = tvg_id
+                # 已经在手动映射里的央视频道，不写入备用map，防止覆盖
+                if clean_name not in MANUAL_TVG_MAP:
+                    epg_backup_map[clean_name] = tvg_id
 
-        logging.info(f"✅ EPG加载成功，共读取 {len(tvg_map)} 个tvg-id映射(含别名)")
-        return tvg_map
+        logging.info(f"✅ EPG备用映射加载成功，共读取 {len(epg_backup_map)} 个频道")
+        return epg_backup_map
     except Exception as e:
         logging.error(f"❌ EPG加载失败: {e}")
-        return None
+        return {}
 
 def load_epg_with_fallback(epg_url_list):
-    """多EPG轮询，成功加载任意一个就返回，全部失败返回空字典"""
+    """依次加载所有EPG，合并备用映射，后面的不会覆盖前面的"""
+    total_backup_map = {}
     for url in epg_url_list:
-        res = load_epg_tvg_map(url)
-        if res is not None and len(res) > 0:
-            return res
-    logging.warning("所有EPG源全部加载失败，tvg-id映射为空")
-    return {}
+        map_tmp = load_epg_tvg_map(url)
+        if map_tmp:
+            # 不覆盖已存在key，保留先读到的映射
+            for k,v in map_tmp.items():
+                if k not in total_backup_map:
+                    total_backup_map[k] = v
+    if len(total_backup_map) ==0:
+        logging.warning("所有EPG源全部加载失败，备用tvg-id映射为空")
+    return total_backup_map
 
-# 全局加载EPG（自动轮询多个EPG地址）
-tvg_mapping = load_epg_with_fallback(EPG_URLS)
+# 全局加载全部EPG合并后的备用映射
+epg_backup_mapping = load_epg_with_fallback(EPG_URLS)
 
 def get_tvgid_by_name(channel_name):
-    """根据频道名获取tvg-id，找不到返回空字符串，兼容CCTV-1/CCTV1"""
+    """
+    获取tvg-id:
+    1. 优先查手动MANUAL_TVG_MAP
+    2. 手动没有，才去EPG合并的备用映射查询
+    """
     clean_name = re.sub(r"[-_\s高清|超清|HD|4K|标清]", "", channel_name).strip().upper()
-    return tvg_mapping.get(clean_name, "")
+    if clean_name in MANUAL_TVG_MAP:
+        return MANUAL_TVG_MAP[clean_name]
+    return epg_backup_mapping.get(clean_name, "")
 
 def parse_template(template_file):
     template_channels = OrderedDict()
@@ -211,17 +244,17 @@ def updateChannelUrlsM3U(channels, template_channels):
             if announcement['name'] is None:
                 announcement['name'] = current_date
 
-    # 修改输出文件名 zubo.m3u / zubo.txt
+    # 多EPG自动拼接到x-tvg-url
     with open("zubo.m3u", "w", encoding="utf-8") as f_m3u:
-        f_m3u.write(f"""#EXTM3U x-tvg-url={",".join(f'"{epg_url}"' for epg_url in config["epg_urls"])}\n""")
+        epg_list_str = ",".join(f'"{epg_url}"' for epg_url in config["epg_urls"])
+        f_m3u.write(f"""#EXTM3U x-tvg-url={epg_list_str}\n""")
 
         with open("zubo.txt", "w", encoding="utf-8") as f_txt:
             for group in config["announcements"]:
                 f_txt.write(f"{group['channel']},#genre#\n")
                 for announcement in group['entries']:
-                    # 公告频道也尝试匹配tvg-id
                     ann_tvgid = get_tvgid_by_name(announcement['name'])
-                    f_m3u.write(f"""#EXTINF:-1 tvg-id="{ann_tvgid}" tvg-name="{announcement['name']}" tvg-logo="{announcement['logo']}" group-title="{group['channel']}",{announcement['name']}\n""")
+                    f_m3u.write(f"""#EXTINF:-1 tvg-id="{ann_tvgid}" tvg-name="{announcement['name']}" tvg-logo="https://epg.112114.xyz/logo/{announcement['name']}.png" group-title="{group['channel']}",{announcement['name']}\n""")
                     f_m3u.write(f"{announcement['url']}\n")
                     f_txt.write(f"{announcement['name']},{announcement['url']}\n")
 
@@ -249,9 +282,8 @@ def updateChannelUrlsM3U(channels, template_channels):
                                     base_url = url
 
                                 new_url = f"{base_url}{url_suffix}"
-                                # 获取真实EPG ID
                                 real_tvgid = get_tvgid_by_name(channel_name)
-                                f_m3u.write(f"#EXTINF:-1 tvg-id=\"{real_tvgid}\" tvg-name=\"{channel_name}\" tvg-logo=\"https://proxy.lalifeier.eu.org/https://raw.githubusercontent.com/zjyktcyfy/zj-fy/main/tv/{channel_name}.png\" group-title=\"{category}\",{channel_name}\n")
+                                f_m3u.write(f"#EXTINF:-1 tvg-id="{real_tvgid}" tvg-name="{channel_name}" tvg-logo="https://proxy.lalifeier.eu.org/https://raw.githubusercontent.com/zjyktcyfy/zj-fy/main/tv/{channel_name}.png" group-title="{category}",{channel_name}\n")
                                 f_m3u.write(new_url + "\n")
                                 f_txt.write(f"{channel_name},{new_url}\n")
 
