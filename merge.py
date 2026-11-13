@@ -6,10 +6,14 @@ from datetime import datetime
 import gzip
 import io
 import os
+import xml.etree.ElementTree as ET
 
-# ===================== EPG配置 =====================
-EPG_GZ_URL = "https://raw.githubusercontent.com/kuke31/xmlgz/main/all.xml.gz"
-EPG_URLS = [EPG_GZ_URL]
+# ===================== EPG配置（多EPG备用列表，按顺序轮询） =====================
+EPG_URLS = [
+    "https://raw.githubusercontent.com/kuke31/xmlgz/main/all.xml.gz",
+    # 可在这里继续添加备用EPG地址
+    # "https://epg.51zmt.top:8000/e.xml.gz",
+]
 
 # ===================== 从环境变量读取源链接M3U_URL_LIST，兼容Github Secret =====================
 source_url_env = os.getenv("M3U_URL_LIST", "")
@@ -38,28 +42,57 @@ config = {
 
 logging.basicConfig(level=logging.INFO, format='%(asctime)s - %(levelname)s - %(message)s', handlers=[logging.FileHandler("function.log", "w", encoding="utf-8"), logging.StreamHandler()])
 
-def load_epg_tvg_map(epg_gz_url):
-    """下载gz压缩EPG，构建 清理后的频道名 -> tvg-id 映射"""
-    logging.info(f"开始加载EPG：{epg_gz_url}")
+def load_epg_tvg_map(epg_url):
+    """加载单个EPG，自动识别gz压缩/xml原生，XML解析兼容多种xmltv格式"""
+    logging.info(f"尝试加载EPG：{epg_url}")
     try:
-        resp = requests.get(epg_gz_url, timeout=30)
+        resp = requests.get(epg_url, timeout=30)
         resp.raise_for_status()
-        with gzip.GzipFile(fileobj=io.BytesIO(resp.content)) as gz:
-            xml = gz.read().decode("utf-8")
+        raw_data = resp.content
+
+        # 判断是否gzip压缩
+        if raw_data[:2] == b'\x1f\x8b':
+            with gzip.GzipFile(fileobj=io.BytesIO(raw_data)) as gz:
+                xml_bytes = gz.read()
+        else:
+            xml_bytes = raw_data
+
+        xml_str = xml_bytes.decode("utf-8", errors="ignore")
+        # 移除命名空间，解决带tv:前缀解析失败
+        xml_str = re.sub(r'xmlns[^"]*"[^"]*"', "", xml_str)
+        xml_str = re.sub(r'\w+:(\w+)', r'\1', xml_str)
+        root = ET.fromstring(xml_str)
+
         tvg_map = {}
-        pattern = re.compile(r'<channel id="([^"]+)".*?<display-name>([^<]+)</display-name>', re.S)
-        for tvg_id, name in pattern.findall(xml):
-            # 名称清洗：去除符号、高清，同时去掉横杠，兼容CCTV1 / CCTV-1
+        for channel in root.findall("channel"):
+            tvg_id = channel.get("id")
+            if not tvg_id:
+                continue
+            dn_node = channel.find("display-name")
+            if dn_node is None or not dn_node.text:
+                continue
+            name = dn_node.text.strip()
+            # 频道名称清洗，和get_tvgid_by_name保持一致
             clean_name = re.sub(r"[-_\s高清|超清|HD|4K|标清]", "", name).strip().upper()
             tvg_map[clean_name] = tvg_id
-        logging.info(f"EPG加载完成，共读取 {len(tvg_map)} 个tvg-id")
+
+        logging.info(f"✅ EPG加载成功，共读取 {len(tvg_map)} 个tvg-id")
         return tvg_map
     except Exception as e:
-        logging.error(f"EPG下载失败: {e}")
-        return {}
+        logging.error(f"❌ EPG加载失败: {e}")
+        return None
 
-# 全局加载一次EPG映射
-tvg_mapping = load_epg_tvg_map(EPG_GZ_URL)
+def load_epg_with_fallback(epg_url_list):
+    """多EPG轮询，成功加载任意一个就返回，全部失败返回空字典"""
+    for url in epg_url_list:
+        res = load_epg_tvg_map(url)
+        if res is not None and len(res) > 0:
+            return res
+    logging.warning("所有EPG源全部加载失败，tvg-id映射为空")
+    return {}
+
+# 全局加载EPG（自动轮询多个EPG地址）
+tvg_mapping = load_epg_with_fallback(EPG_URLS)
 
 def get_tvgid_by_name(channel_name):
     """根据频道名获取tvg-id，找不到返回空字符串，兼容CCTV-1/CCTV1"""
