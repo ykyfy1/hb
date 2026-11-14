@@ -57,7 +57,9 @@ config = {
     "announcements": [
         {
             "channel": "公告",
-            "entries": [
+            "entries": [ {"name": "直播源均来自网络，不得商用，仅供学习交流使用。", "url": "http://ali-xwl.cztv.com/live/channel061080Plxw.m3u8", "logo": "https://proxy.lalifeier.eu.org/https://raw.githubusercontent.com/zjyktcyfy/zj-fy/main/tv/武术台.png"},
+            {"name": "更新日期", "url": "http://ali-xwl.cztv.com/live/channel061080Plxw.m3u8", "logo": "https://proxy.lalifeier.eu.org/https://raw.githubusercontent.com/zjyktcyfy/zj-fy/main/tv/武术台.png"},
+            {"name": None, "url": "https://live-auth.51kandianshi.com/szgd/csztv4.m3u8", "logo": "https://proxy.lalifeier.eu.org/https://raw.githubusercontent.com/zjyktcyfy/zj-fy/main/tv/武术台.png"},
                 {
                     "name": None,
                     "logo": "",
