@@ -10,7 +10,7 @@ import xml.etree.ElementTree as ET
 
 # ===================== 手动主映射【央视固定，EPG不会覆盖】 =====================
 MANUAL_TVG_MAP = {
-    "CCTV1":    "1",
+    "CCTV1":    "CCTV1",
     "CCTV2":    "2",
     "CCTV3":    "3",
     "CCTV4":    "CCTV4",
@@ -27,9 +27,9 @@ MANUAL_TVG_MAP = {
     "CCTV15":   "16",
     "CCTV16":   "17",
     "CCTV17":   "18",
-    "CCTV4K":   "19",
+    "CCTV4K":   "CCTV4K",
     "CCTV5+":   "6",
-    "CCTV8K":   "20",
+    "CCTV8K":   "CCTV8K",
     "浙江钱江都市":   "172",
     "北京淘电影":   "114",
     "北京淘剧场":   "112",
