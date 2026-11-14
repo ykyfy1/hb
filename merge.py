@@ -51,7 +51,7 @@ CCTV_SET = set(MANUAL_TVG_MAP.keys())
 
 # ===================== EPG配置，只用kuke31源 =====================
 EPG_URLS = [
-    "https://raw.githubusercontent.com/kuke31/xmlgz/main/all.xml.gz",
+    "https://proxy.lalifeier.eu.org/https://raw.githubusercontent.com/kuke31/xmlgz/main/all.xml.gz",
     "https://epg.112114.xyz/pp.xml",
     "http://epg.51zmt.top:8000/e.xml.gz",
 ]
